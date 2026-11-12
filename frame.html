@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Isolation frame</title>
+<style>
+  body { margin: 0; font: 15px/1.4 -apple-system, sans-serif; background: #141414; color: #ededed; padding: 12px; }
+  #n { font-size: 42px; font-variant-numeric: tabular-nums; }
+  #sec { color: #a1a1aa; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="n">0</div>
+<div id="sec"></div>
+<script>
+(function () {
+  var parentOrigin = new URLSearchParams(location.search).get("parent") || "";
+  var n = 0;
+  var security = "not tested";
+  try {
+    void parent.document.title;
+    security = "can read the page";
+  } catch (err) {
+    security = "cannot read the page (" + err.name + ")";
+  }
+  document.getElementById("sec").textContent = security;
+  function tick() {
+    n += 1;
+    document.getElementById("n").textContent = String(n);
+    if (parentOrigin.indexOf("https://") === 0) {
+      parent.postMessage({ n: n, t: Date.now(), security: security }, parentOrigin);
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
