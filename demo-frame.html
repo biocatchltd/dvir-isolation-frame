@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>other-site.com</title>
+<style>
+  :root{
+    --text:#0a2540;--muted:#425466;--border:rgba(10,37,64,.08);
+    --sans:system-ui,-apple-system,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--sans);background:transparent;color:var(--text);
+    padding:6px 12px 12px;display:flex;flex-direction:column;gap:4px;height:100%;
+    transition:opacity .3s;
+  }
+  .line{
+    display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#425466;
+    padding:9px 6px;border-bottom:1px solid var(--border);border-radius:4px;
+  }
+  .line:last-of-type{border-bottom:0}
+  .line b{font-weight:600;color:#0a2540}
+  .line.gold b{color:#b3540b}
+  .line.aimed{animation:aimPulse .45s ease-in-out infinite}
+  .line.aimed b{color:#df1b41}
+  @keyframes aimPulse{50%{background:rgba(223,27,65,.08)}}
+  .line.kept{animation:keptFlash .8s ease}
+  @keyframes keptFlash{35%{background:rgba(21,190,83,.12)}}
+  .animbox{margin-top:10px}
+  .animbox .alabel{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:#8792a2;font-family:var(--mono);margin-bottom:6px}
+  .track{position:relative;height:10px;border-radius:999px;background:rgba(217,121,23,.12);border:1px solid rgba(217,121,23,.28)}
+  .glide{position:absolute;top:50%;left:0;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#d97917;box-shadow:0 0 8px rgba(217,121,23,.35);will-change:transform}
+  .vitals{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted);min-height:18px;margin-top:auto;padding-top:10px}
+  .livedot{width:7px;height:7px;border-radius:50%;background:#d97917;flex:none}
+  .status{color:var(--muted)}
+  button{
+    align-self:flex-start;font:400 12px var(--sans);padding:0;cursor:pointer;margin-top:8px;
+    border:0;background:none;color:#b3540b;border-bottom:1px solid rgba(179,84,11,.4);
+  }
+  button:hover{color:#d97917}
+  button:disabled{color:#a3acb9;border-color:transparent;cursor:default}
+  body.is-frozen{opacity:.45}
+  body.is-frozen .livedot{background:#8792a2}
+</style>
+</head>
+<body>
+  <div class="line gold" id="secretLine"><span>Private note</span><b id="secret">keep-this-here</b></div>
+  <div class="line"><span>Balance</span><b id="sandboxBalance">$9,999</b></div>
+  <div class="animbox">
+    <div class="alabel">animated live by this page</div>
+    <div class="track" id="sTrack"><div class="glide" id="sGlide"></div></div>
+  </div>
+  <button type="button" id="block">Freeze me for 3 seconds</button>
+  <div class="vitals">
+    <span class="livedot" id="sHb"></span>
+    <span id="sClock">0.0s</span>
+    <span style="flex:1"></span>
+    <span class="status" id="status">running on its own</span>
+  </div>
+
+<script>
+  window.__IFRAME_SECRET = 'keep-this-here';
+  window.sandboxBalance = 9999;
+  window.sandboxOnly = function () {
+    window.sandboxBalance = 0;
+    var el = document.getElementById('sandboxBalance');
+    if (el) el.textContent = '$0';
+  };
+  try { localStorage.setItem('iframe-only', 'iframe-private-data'); } catch (e) {}
+
+  /* ---- own clock, JS-driven so a blocked thread visibly stops it ---- */
+  var t0 = performance.now();
+  var sClock = document.getElementById('sClock'), sHb = document.getElementById('sHb');
+  function elapsed() { return ((performance.now() - t0) / 1000).toFixed(1) + 's'; }
+  function tick(now){
+    sClock.textContent = Math.max(0, (now - t0) / 1000).toFixed(1) + 's';
+    var beat = Math.max(0, Math.sin(now / 260));
+    sHb.style.transform = 'scale(' + (1 + beat * 0.5) + ')';
+    sHb.style.opacity = String(0.5 + beat * 0.5);
+    var track = document.getElementById('sTrack'), glide = document.getElementById('sGlide');
+    if (track && glide) {
+      var w = Math.max(track.clientWidth - 12, 0);
+      glide.style.transform = 'translateX(' + ((Math.sin(now / 700) * 0.5 + 0.5) * w) + 'px)';
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  function freezeFor(ms){
+    var status = document.getElementById('status');
+    document.body.classList.add('is-frozen');
+    status.textContent = 'stuck';
+    /* two rAFs: first paints the frozen look, second blocks the thread */
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        var end = performance.now() + ms;
+        while (performance.now() < end) {}
+        document.body.classList.remove('is-frozen');
+        status.textContent = 'running again';
+        window.parent.postMessage({ type: 'frozen', ms: ms }, '*');
+      });
+    });
+  }
+
+  document.getElementById('block').addEventListener('click', function(){
+    var btn = this;
+    btn.disabled = true;
+    freezeFor(3000);
+    setTimeout(function(){ btn.disabled = false; }, 3400);
+  });
+
+  /* ---- the real attacks, run on demand ---- */
+  function attempt(what, fn){
+    try {
+      var value = fn();
+      var text = value == null ? '' : String(value);
+      window.parent.postMessage({ type: 'tried', what: what, ok: !!text, value: text }, '*');
+    } catch (err) {
+      var name = err && err.name ? err.name : 'Error';
+      var msg = err && err.message ? err.message : 'blocked';
+      window.parent.postMessage({ type: 'tried', what: what, ok: false, error: name + ': ' + msg }, '*');
+    }
+  }
+
+  window.addEventListener('message', function(e){
+    if (e.source !== window.parent || !e.data) return;
+    var d = e.data;
+
+    if (d.type === 'try') {
+      var sel = d.sel || '#bankPassword';
+      if (d.what === 'password') {
+        attempt('password', function(){ return window.parent.document.querySelector(sel).value; });
+      } else if (d.what === 'write') {
+        attempt('write', function(){
+          var input = window.parent.document.querySelector(sel);
+          input.value = 'stolen';
+          return input.value;
+        });
+      } else if (d.what === 'cookie') {
+        attempt('cookie', function(){ return window.parent.document.cookie; });
+      } else if (d.what === 'money') {
+        attempt('money', function(){ window.parent.transferMoney(); return 'called'; });
+      } else if (d.what === 'balance') {
+        attempt('balance', function(){ return String(window.parent.bankBalance); });
+      } else if (d.what === 'storage') {
+        attempt('storage', function(){ return window.parent.localStorage.getItem('host-only'); });
+      } else if (d.what === 'html') {
+        attempt('html', function(){ return window.parent.document.documentElement.outerHTML.slice(0, 80) + '…'; });
+      } else if (d.what === 'url') {
+        attempt('url', function(){ return window.parent.location.href; });
+      }
+      return;
+    }
+
+    if (d.type === 'freeze') { freezeFor(Number(d.ms) || 3000); return; }
+
+    if (d.type === 'ping') {
+      window.parent.postMessage({ type: 'pong', clock: elapsed() }, '*');
+      return;
+    }
+
+    if (d.type === 'flash') {
+      var el = document.getElementById('secretLine');
+      el.classList.remove('kept', 'aimed');
+      void el.offsetWidth;
+      el.classList.add(d.mode === 'attack' ? 'aimed' : 'kept');
+      if (d.mode !== 'attack') setTimeout(function(){ el.classList.remove('kept'); }, 850);
+      return;
+    }
+  });
+</script>
+</body>
+</html>
